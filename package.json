@@ -1,0 +1,53 @@
+{
+  "name": "codesage",
+  "version": "0.0.1",
+  "description": "CODESAGE: Code Ontology Discovery & Exploration System - Fast, accurate, persistent codebase knowledge via MCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "codesage": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "scripts",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "clean": "rm -rf dist",
+    "postinstall": "node scripts/install.js"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "code-analysis",
+    "ast",
+    "static-analysis",
+    "code-indexing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "chokidar": "^4.0.3",
+    "fast-glob": "^3.3.3",
+    "ioredis": "^5.8.2",
+    "micromatch": "^4.0.8",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "devDependencies": {
+    "@types/micromatch": "^4.0.10",
+    "@types/node": "^22.19.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
