@@ -11,7 +11,7 @@
 - **⚡ Impact Assessment** - See what might break when you modify files
 - **🎯 Smart Prioritization** - Identifies important code using PageRank algorithm
 - **🔄 Real-time Updates** - File watching keeps knowledge up-to-date
-- **🌐 Multi-language Support** - TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
+- **🌐 Multi-language Support** - Full parsing for TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
 
 ## 🚀 Quick Start
 
@@ -105,8 +105,8 @@ Create `codesage.config.json` in your project:
     "keyPrefix": "codesage:"
   },
   "indexer": {
-    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.py"],
-    "exclude": ["**/node_modules/**", "**/dist/**"],
+    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.py", "**/*.go", "**/*.rs", "**/*.java", "**/*.c", "**/*.cpp"],
+    "exclude": ["**/node_modules/**", "**/dist/**", "**/target/**", "**/build/**"],
     "maxFileSize": 1048576
   },
   "watcher": {
@@ -120,42 +120,81 @@ Create `codesage.config.json` in your project:
 
 CODESAGE is built with:
 
-- **6,173 lines of TypeScript** across 35 files
 - **Tree-sitter parsers** for accurate code understanding
 - **Redis storage** for fast symbol lookup
-- **PageRank algorithm** for importance scoring (128-line implementation)
+- **PageRank algorithm** for importance scoring
 - **MCP protocol** for Claude Code integration
 - **File watching** with chokidar for real-time updates
 
 ## 📊 What's Inside
 
 ### Language Support
-- TypeScript/JavaScript (586-line parser)
-- Python, Go, Rust, Java, C/C++ parsers
+- **TypeScript/JavaScript** - Classes, interfaces, functions, types, JSDoc
+- **Python** - Classes, functions, methods, docstrings, imports
+- **Go** - Structs, interfaces, functions, methods, godoc comments
+- **Rust** - Structs, enums, traits, impl blocks, doc comments
+- **Java** - Classes, interfaces, enums, methods, Javadoc
+- **C/C++** - Classes, structs, functions, namespaces, macros
 
 ### Core Components
 - **11 MCP tools** for code analysis
-- **Redis storage layer** (766 lines) with connection pooling
-- **Dependency resolver** (407 lines) for mapping relationships
-- **Symbol extractor** (435 lines) using tree-sitter
+- **Redis storage layer** with connection pooling
+- **Dependency resolver** for mapping relationships
+- **Symbol extractors** using tree-sitter for each language
 - **Git metadata tracking** for stability metrics
 
 ## 🎯 Real Capabilities
 
-Based on analysis of the codebase:
+- ✅ **Full parsing** for TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
+- ✅ **Builds dependency graphs** between all symbols across languages
+- ✅ **Calculates PageRank scores** to identify important code
+- ✅ **Tracks file changes** and updates incrementally
+- ✅ **Integrates with Claude Code** via MCP
+- ✅ **Stores all data in Redis** for fast retrieval
 
-- ✅ Parses and indexes TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
-- ✅ Builds dependency graphs between all symbols
-- ✅ Calculates PageRank scores to identify important code
-- ✅ Tracks file changes and updates incrementally
-- ✅ Integrates with Claude Code via MCP
-- ✅ Stores all data in Redis for fast retrieval
+## Language-Specific Features
+
+### TypeScript/JavaScript
+- Class inheritance and interface implementation
+- JSDoc extraction
+- Import/export analysis
+- Type aliases and enums
+
+### Python
+- Docstring extraction (""" and ''')
+- Decorator support
+- Class method detection
+- Import/from-import tracking
+
+### Go
+- Struct embedding
+- Interface implementation
+- Godoc comment parsing
+- Package-level visibility
+
+### Rust
+- Trait implementations
+- Lifetime annotations
+- Macro expansion support
+- Module visibility
+
+### Java
+- Annotation support
+- Generic type parameters
+- Access modifier detection
+- Package imports
+
+### C/C++
+- Template support (C++)
+- Namespace handling
+- Preprocessor macros
+- Header file dependencies
 
 ## Limitations
 
 - Requires Redis server to be running
-- Currently optimized for TypeScript/JavaScript (other languages have simpler parsers)
 - Performance depends on codebase size and Redis configuration
+- Some advanced language features may not be fully supported
 
 ## 🤝 Contributing
 
