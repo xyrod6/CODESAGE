@@ -11,7 +11,7 @@
 - **⚡ Impact Assessment** - See what might break when you modify files
 - **🎯 Smart Prioritization** - Identifies important code using PageRank algorithm
 - **🔄 Real-time Updates** - File watching keeps knowledge up-to-date
-- **🌐 Multi-language Support** - Full parsing for TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
+- **🌐 Multi-language Support** - TypeScript, JavaScript, Python (Go, Rust, Java, C/C++ temporarily disabled)
 
 ## 🚀 Quick Start
 
@@ -105,7 +105,7 @@ Create `codesage.config.json` in your project:
     "keyPrefix": "codesage:"
   },
   "indexer": {
-    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.py", "**/*.go", "**/*.rs", "**/*.java", "**/*.c", "**/*.cpp"],
+    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py"],
     "exclude": ["**/node_modules/**", "**/dist/**", "**/target/**", "**/build/**"],
     "maxFileSize": 1048576
   },
@@ -129,12 +129,12 @@ CODESAGE is built with:
 ## 📊 What's Inside
 
 ### Language Support
-- **TypeScript/JavaScript** - Classes, interfaces, functions, types, JSDoc
-- **Python** - Classes, functions, methods, docstrings, imports
-- **Go** - Structs, interfaces, functions, methods, godoc comments
-- **Rust** - Structs, enums, traits, impl blocks, doc comments
-- **Java** - Classes, interfaces, enums, methods, Javadoc
-- **C/C++** - Classes, structs, functions, namespaces, macros
+- **TypeScript/JavaScript** ✅ - Classes, interfaces, functions, types, JSDoc
+- **Python** ✅ - Classes, functions, methods, docstrings, imports
+- **Go** ⚠️ - Structs, interfaces, functions, methods, godoc comments *(temporarily disabled)*
+- **Rust** ⚠️ - Structs, enums, traits, impl blocks, doc comments *(temporarily disabled)*
+- **Java** ⚠️ - Classes, interfaces, enums, methods, Javadoc *(temporarily disabled)*
+- **C/C++** ⚠️ - Classes, structs, functions, namespaces, macros *(temporarily disabled)*
 
 ### Core Components
 - **11 MCP tools** for code analysis
@@ -145,12 +145,22 @@ CODESAGE is built with:
 
 ## 🎯 Real Capabilities
 
-- ✅ **Full parsing** for TypeScript, JavaScript, Python, Go, Rust, Java, C/C++
-- ✅ **Builds dependency graphs** between all symbols across languages
+### ✅ Currently Working (v0.0.1)
+- ✅ **Full parsing** for TypeScript, JavaScript, Python
+- ✅ **Builds dependency graphs** between all symbols across supported languages
 - ✅ **Calculates PageRank scores** to identify important code
 - ✅ **Tracks file changes** and updates incrementally
 - ✅ **Integrates with Claude Code** via MCP
 - ✅ **Stores all data in Redis** for fast retrieval
+
+### ⚠️ Temporarily Disabled
+The following language parsers are temporarily disabled due to tree-sitter binding issues with Node.js 22:
+- ❌ Go
+- ❌ Rust
+- ❌ Java
+- ❌ C/C++
+
+**Status**: We're working on resolving these issues. The parsers are implemented but need tree-sitter binding fixes for the current Node.js version.
 
 ## Language-Specific Features
 
