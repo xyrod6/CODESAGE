@@ -15,7 +15,10 @@ export type SymbolKind =
   | 'constant'
   | 'property'
   | 'module'
-  | 'namespace';
+  | 'namespace'
+  | 'element'
+  | 'script'
+  | 'style';
 
 export type DependencyType =
   | 'imports'
@@ -23,7 +26,8 @@ export type DependencyType =
   | 'implements'
   | 'calls'
   | 'uses'
-  | 'instantiates';
+  | 'instantiates'
+  | 'references';
 
 import type { GitMetadata } from '../git/metadata';
 
@@ -40,6 +44,7 @@ export interface Symbol {
   exported: boolean;
   language: string;
   gitMetadata?: GitMetadata;
+  pageRank?: number;
 }
 
 export interface DependencyEdge {

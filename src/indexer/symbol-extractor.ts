@@ -308,7 +308,9 @@ export class SymbolExtractor extends EventEmitter {
     for (const dep of dependencies) {
       const processed: DependencyEdge = {
         ...dep,
-        from: dep.from.includes(':') ? dep.from : `${filepath}:${dep.from}:1`
+        // For import dependencies, 'from' is already a filepath, don't modify it
+        // For other dependencies, 'from' might be a symbol name that needs to be converted to an ID
+        from: dep.type === 'imports' ? dep.from : (dep.from.includes(':') ? dep.from : `${filepath}:${dep.from}:1`)
       };
 
       // Try to resolve target symbol
@@ -319,10 +321,14 @@ export class SymbolExtractor extends EventEmitter {
         targetSymbol = symbolMap.get(dep.to);
       }
 
-      if (targetSymbol) {
+      // For imports, keep the import path as is (will be resolved by DependencyResolver)
+      // For other dependencies, resolve to symbol ID if found
+      if (targetSymbol && dep.type !== 'imports') {
         processed.to = targetSymbol.id;
-        processedDependencies.push(processed);
       }
+      // Keep ALL dependencies, even unresolved ones
+      // Cross-file imports will be resolved later by DependencyResolver
+      processedDependencies.push(processed);
     }
 
     return processedDependencies;

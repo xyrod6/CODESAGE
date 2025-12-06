@@ -1,5 +1,6 @@
 import tsModule from 'tree-sitter-typescript';
 import Parser from 'tree-sitter';
+import { extname } from 'node:path';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind, DependencyType } from '../base.js';
 import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
@@ -15,6 +16,7 @@ export class TypeScriptParser extends BaseParser {
   private tsLanguage: any;
   private tsxLanguage: any;
   private isTSX: boolean = false;
+  private currentLanguage: string = 'typescript';
 
   constructor() {
     super();
@@ -28,7 +30,10 @@ export class TypeScriptParser extends BaseParser {
 
   async parse(filepath: string, content: string): Promise<ParseResult> {
     // Determine if we should use TSX parser
-    this.isTSX = filepath.endsWith('.tsx') || filepath.endsWith('.jsx');
+    const extension = extname(filepath).toLowerCase();
+    this.isTSX = extension === '.tsx' || extension === '.jsx';
+    const isJavaScript = extension === '.js' || extension === '.jsx' || extension === '.mjs' || extension === '.cjs';
+    this.currentLanguage = isJavaScript ? 'javascript' : 'typescript';
 
     if (this.isTSX) {
       this.parser.setLanguage(this.tsxLanguage);
@@ -60,6 +65,9 @@ export class TypeScriptParser extends BaseParser {
   private walkNode(node: Parser.SyntaxNode, context: SymbolContext, symbols: Symbol[], dependencies: DependencyEdge[], parent?: Symbol): void {
     // Extract JSDoc comments before this node
     const docstring = this.extractJSDoc(node, context.content);
+    const exportDeclaration = node.type === 'export_statement'
+      ? getChildForFieldName(node, 'declaration')
+      : null;
 
     // Handle different node types
     switch (node.type) {
@@ -176,11 +184,10 @@ export class TypeScriptParser extends BaseParser {
         break;
 
       case 'export_statement':
-        const declaration = getChildForFieldName(node, 'declaration');
-        if (declaration) {
-          this.walkNode(declaration, context, symbols, dependencies, parent);
+        if (exportDeclaration) {
+          this.walkNode(exportDeclaration, context, symbols, dependencies, parent);
         }
-        break;
+        return;
 
       case 'import_statement':
         this.extractImport(node, context, dependencies);
@@ -194,7 +201,11 @@ export class TypeScriptParser extends BaseParser {
       if (node.type === 'interface_declaration' && child.type === 'object_type') continue;
       if (node.type === 'enum_declaration' && child.type === 'enum_body') continue;
       if (node.type === 'module_declaration' && child.type === 'statement_block') continue;
-      if (node.type === 'export_statement' && child.type === 'declaration') continue;
+      if (
+        exportDeclaration &&
+        child.startIndex === exportDeclaration.startIndex &&
+        child.endIndex === exportDeclaration.endIndex
+      ) continue;
 
       this.walkNode(child, context, symbols, dependencies, parent);
     }
@@ -583,6 +594,6 @@ export class TypeScriptParser extends BaseParser {
   }
 
   getLanguage(): string {
-    return this.isTSX ? 'typescript' : 'typescript';
+    return this.currentLanguage;
   }
 }

@@ -258,6 +258,7 @@ export class Storage implements IStorage {
         exported: data.exported === '1',
         language: data.language,
         gitMetadata: data.gitMetadata ? JSON.parse(data.gitMetadata) : undefined,
+        pageRank: data.pageRank ? parseFloat(data.pageRank) : undefined,
       };
     } catch (error) {
       console.error(`Error parsing symbol ${id}:`, error);
@@ -317,6 +318,7 @@ export class Storage implements IStorage {
               exported: dataRecord.exported === '1',
               language: dataRecord.language,
               gitMetadata: dataRecord.gitMetadata ? JSON.parse(dataRecord.gitMetadata) : undefined,
+              pageRank: dataRecord.pageRank ? parseFloat(dataRecord.pageRank) : undefined,
             };
 
             symbols.push(symbol);
@@ -546,6 +548,7 @@ export class Storage implements IStorage {
                     exported: dataRecord.exported === '1',
                     language: dataRecord.language,
                     gitMetadata: dataRecord.gitMetadata ? JSON.parse(dataRecord.gitMetadata) : undefined,
+                    pageRank: dataRecord.pageRank ? parseFloat(dataRecord.pageRank) : undefined,
                   };
 
                   symbols.push(symbol);
@@ -644,7 +647,10 @@ export class Storage implements IStorage {
       const pipeline = this.redis.multi();
 
       for (const [id, score] of batch) {
+        // Store in sorted set for ranking queries
         pipeline.zadd(this.k('pagerank'), score, id);
+        // Also store in the symbol hash for easy retrieval
+        pipeline.hset(this.k(`symbol:${id}`), 'pageRank', score.toString());
       }
 
       const results = await pipeline.exec();

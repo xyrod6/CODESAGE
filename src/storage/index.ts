@@ -24,4 +24,4 @@ export interface IStorage {
 }
 
 export const storage: IStorage = new RedisStorage();
-export { FileTracking, ProjectMetadata } from './types.js';
+export type { FileTracking, ProjectMetadata } from './types.js';

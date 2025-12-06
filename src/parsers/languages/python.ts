@@ -18,7 +18,7 @@ export class PythonParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.language = pythonModule.language;
+    this.language = pythonModule;
     this.parser.setLanguage(this.language);
   }
 

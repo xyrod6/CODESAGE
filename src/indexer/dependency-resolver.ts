@@ -1,8 +1,112 @@
 import { storage } from '../storage/index.js';
 import { Symbol, DependencyEdge } from '../parsers/base.js';
 import { config } from '../config.js';
+import { resolve, dirname, extname } from 'node:path';
 
 export class DependencyResolver {
+  /**
+   * Resolve cross-file import dependencies
+   * Takes raw import paths from parsers and resolves them to symbol IDs
+   */
+  async resolveCrossFileImports(rawDependencies: DependencyEdge[], allSymbols: Symbol[]): Promise<DependencyEdge[]> {
+    console.error(`[DependencyResolver] resolveCrossFileImports called with ${rawDependencies.length} raw deps, ${allSymbols.length} symbols`);
+
+    const resolvedDeps: DependencyEdge[] = [];
+
+    // Build symbol index for fast lookup
+    const symbolsByFile = new Map<string, Symbol[]>();
+    const exportedSymbolsByFile = new Map<string, Symbol[]>();
+
+    for (const symbol of allSymbols) {
+      if (!symbolsByFile.has(symbol.filepath)) {
+        symbolsByFile.set(symbol.filepath, []);
+        exportedSymbolsByFile.set(symbol.filepath, []);
+      }
+      symbolsByFile.get(symbol.filepath)!.push(symbol);
+      if (symbol.exported) {
+        exportedSymbolsByFile.get(symbol.filepath)!.push(symbol);
+      }
+    }
+
+    // Process each raw dependency
+    for (const dep of rawDependencies) {
+      if (dep.type !== 'imports') {
+        // Non-import dependencies (extends, implements, etc.) pass through as-is
+        // if they already have valid symbol IDs
+        if (dep.from.includes(':') && dep.to.includes(':')) {
+          resolvedDeps.push(dep);
+        }
+        continue;
+      }
+
+      // For import dependencies, resolve the import path
+      const importerFile = dep.from; // This is a filepath
+      const importPath = dep.to;     // This is an import path like './storage/index.js'
+
+      // Resolve the import path to an actual file
+      const resolvedPath = this.resolveImportPath(importerFile, importPath);
+      if (!resolvedPath) continue;
+
+      // Get all symbols from the importing file
+      const importingSymbols = symbolsByFile.get(importerFile) || [];
+
+      // Get exported symbols from the imported file
+      const importedSymbols = exportedSymbolsByFile.get(resolvedPath) || [];
+
+      // Create dependencies from all symbols in the importing file
+      // to all exported symbols in the imported file
+      for (const fromSymbol of importingSymbols) {
+        for (const toSymbol of importedSymbols) {
+          resolvedDeps.push({
+            from: fromSymbol.id,
+            to: toSymbol.id,
+            type: 'imports',
+            location: dep.location,
+          });
+        }
+      }
+    }
+
+    console.error(`[DependencyResolver] Resolved ${resolvedDeps.length} cross-file import dependencies`);
+    return resolvedDeps;
+  }
+
+  /**
+   * Resolve an import path to an absolute file path
+   */
+  private resolveImportPath(importerFile: string, importPath: string): string | null {
+    try {
+      // Handle relative imports
+      if (importPath.startsWith('.')) {
+        const importerDir = dirname(importerFile);
+        let resolved = resolve(importerDir, importPath);
+
+        // Try adding extensions if file doesn't have one
+        if (!extname(resolved)) {
+          // Try .ts, .tsx, .js, .jsx, index files
+          const extensions = ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
+          for (const ext of extensions) {
+            // For simplicity, just try .ts/.js for now
+            if (ext === '.ts' || ext === '.js') {
+              const candidate = resolved + ext;
+              // We can't check file existence here, so just return first candidate
+              // In a full implementation, we'd check which file actually exists
+              return candidate;
+            }
+          }
+        }
+
+        return resolved;
+      }
+
+      // For now, skip node_modules and absolute imports
+      // A full implementation would resolve these too
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   async resolveDependencies(symbols: Symbol[]): Promise<DependencyEdge[]> {
     const dependencies: DependencyEdge[] = [];
 

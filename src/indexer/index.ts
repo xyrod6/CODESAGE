@@ -127,8 +127,30 @@ export class Indexer {
           await storage.addSymbols(extractionResult.symbols);
         }
 
-        if (extractionResult.dependencies.length > 0) {
-          await storage.addDependencies(extractionResult.dependencies);
+        // Resolve and store dependencies
+        console.error(`Raw dependencies from parsers: ${extractionResult.dependencies.length}`);
+        console.error(`Symbols extracted: ${extractionResult.symbols.length}`);
+
+        if (extractionResult.dependencies.length > 0 || extractionResult.symbols.length > 0) {
+          console.error('Resolving import dependencies...');
+
+          // Resolve cross-file import dependencies
+          const importDeps = await this.dependencyResolver.resolveCrossFileImports(
+            extractionResult.dependencies,
+            extractionResult.symbols
+          );
+          console.error(`Resolved ${importDeps.length} import dependencies`);
+
+          // Resolve intra-file symbol dependencies (extends, implements, uses, etc.)
+          const symbolDeps = await this.dependencyResolver.resolveDependencies(extractionResult.symbols);
+          console.error(`Resolved ${symbolDeps.length} symbol dependencies`);
+
+          const allDeps = [...importDeps, ...symbolDeps];
+
+          if (allDeps.length > 0) {
+            console.error(`Storing ${allDeps.length} resolved dependencies...`);
+            await storage.addDependencies(allDeps);
+          }
         }
 
         // Update file tracking info

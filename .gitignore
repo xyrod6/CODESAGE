@@ -89,3 +89,25 @@ jspm_packages/
 
 # DynamoDB Local files
 .dynamodb/
+
+# Serena and other temp directories
+.serena/
+
+# Compiled files in root (build artifacts that should be in dist/)
+/*.js
+/*.d.ts
+/*.d.ts.map
+/*.js.map
+/git/
+/graph/
+/indexer/
+/parsers/
+/storage/
+/tools/
+
+# But keep important root files
+!vitest.config.ts
+
+# Old test files
+test-*.js
+test-*.d.ts

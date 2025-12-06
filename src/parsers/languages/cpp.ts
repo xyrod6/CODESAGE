@@ -21,8 +21,8 @@ export class CppParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.cLanguage = cModule.language;
-    this.cppLanguage = cppModule.language;
+    this.cLanguage = cModule;
+    this.cppLanguage = cppModule;
     this.isCppFile = false;
   }
 
