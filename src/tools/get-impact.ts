@@ -1,6 +1,7 @@
 import { storage } from '../storage/index.js';
 import { graph } from '../graph/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const getImpact: Tool = {
   name: 'get_impact',
@@ -24,6 +25,7 @@ WHEN TO USE: Use this BEFORE making changes to multiple files or critical code. 
     const includeGit = Boolean(include_git);
 
     try {
+      await ensureProjectContext();
       // Get all symbols from the specified files
       const allSymbolIds: string[] = [];
 

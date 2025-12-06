@@ -1,5 +1,6 @@
 import { storage } from '../storage/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const getDependents: Tool = {
   name: 'get_dependents',
@@ -47,6 +48,7 @@ WHEN TO USE: Use this BEFORE modifying any file to understand what might break. 
     };
 
     try {
+      await ensureProjectContext();
       // Check if target is a file path or symbol ID
       const isFilePath = !target.includes(':');
       let startId = target;

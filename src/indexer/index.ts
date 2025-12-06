@@ -44,6 +44,24 @@ export class Indexer {
       throw new Error('Indexing already in progress');
     }
 
+    // Set the project context in storage so Redis keys are properly namespaced
+    await storage.setProjectContext(projectPath);
+
+    // Update the project root cache (from tools/utils.ts) to keep it in sync
+    // This is a bit of a hack but necessary for the multi-project support
+    try {
+      const { updateProjectRootCache } = await import('../tools/utils.js');
+      updateProjectRootCache(projectPath);
+    } catch (error) {
+      // Ignore if the module doesn't exist (shouldn't happen but be safe)
+    }
+
+    // Try to acquire a lock for this project (prevents concurrent indexing of the same project)
+    const lockAcquired = await storage.acquireLock('indexing', 600000); // 10 min timeout
+    if (!lockAcquired) {
+      throw new Error(`Project is already being indexed by another process. Please wait and try again.`);
+    }
+
     this.isIndexing = true;
     this.projectPath = projectPath;
 
@@ -191,8 +209,14 @@ export class Indexer {
       }
 
       return stats;
+    } catch (error) {
+      // Release lock on error
+      await storage.releaseLock('indexing');
+      throw error;
     } finally {
       this.isIndexing = false;
+      // Release lock after indexing completes successfully
+      await storage.releaseLock('indexing');
     }
   }
 

@@ -1,6 +1,7 @@
 import { storage } from '../storage/index.js';
 import { graph } from '../graph/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const findSimilar: Tool = {
   name: 'find_similar',
@@ -20,6 +21,7 @@ WHEN TO USE: Use this when implementing something new to find existing patterns 
     const { description, kind, limit = 5 } = args;
 
     try {
+      await ensureProjectContext();
       // Extract keywords from description
       const keywords = description.toLowerCase()
         .split(/\W+/)

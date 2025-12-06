@@ -1,6 +1,7 @@
 import { storage } from '../storage/index.js';
 import { graph } from '../graph/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { config } from '../config.js';
@@ -23,6 +24,7 @@ WHEN TO USE: Use this as your FIRST step when exploring any codebase. Shows dire
     const includeGit = Boolean(include_git);
 
     try {
+      await ensureProjectContext();
       const metadata = await storage.getProjectMetadata();
       if (!metadata) {
         return {

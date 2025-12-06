@@ -5,6 +5,7 @@ import { FileTracking, ProjectMetadata } from './types.js';
 export interface IStorage {
   initialize(): Promise<void>;
   close(): Promise<void>;
+  setProjectContext(projectPath: string): Promise<void>;
   addSymbols(symbols: Symbol[]): Promise<void>;
   getSymbol(id: string): Promise<Symbol | null>;
   getSymbolsByFile(filepath: string): Promise<Symbol[]>;
@@ -21,6 +22,8 @@ export interface IStorage {
   removeFileTracking(filepath: string): Promise<void>;
   updateProjectMetadata(metadata: ProjectMetadata): Promise<void>;
   getProjectMetadata(): Promise<ProjectMetadata | null>;
+  acquireLock(lockName: string, ttlMs?: number): Promise<boolean>;
+  releaseLock(lockName: string): Promise<void>;
 }
 
 export const storage: IStorage = new RedisStorage();

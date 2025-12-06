@@ -1,5 +1,6 @@
 import { storage } from '../storage/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const getFileStructure: Tool = {
   name: 'get_file_structure',
@@ -18,6 +19,7 @@ WHEN TO USE: Use this INSTEAD of Read when you need to understand what's in a fi
     const { filepath, include_private = true } = args;
 
     try {
+      await ensureProjectContext();
       const symbols = await storage.getSymbolsByFile(filepath);
 
       // Filter private symbols if requested

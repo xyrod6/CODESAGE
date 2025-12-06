@@ -1,6 +1,7 @@
 import { storage } from '../storage/index.js';
 import { graph } from '../graph/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const getSymbol: Tool = {
   name: 'get_symbol',
@@ -21,6 +22,8 @@ WHEN TO USE: Use this INSTEAD of Grep when looking for a specific symbol by name
     const { name, filepath, kind, limit = 10 } = args;
 
     try {
+      await ensureProjectContext();
+
       const allSymbols = await storage.getAllSymbols();
       const pageRanks = await storage.getPageRanks();
       const query = name.toLowerCase();

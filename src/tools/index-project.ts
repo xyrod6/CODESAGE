@@ -19,6 +19,9 @@ WHEN TO USE: Run at the start of every new session or when you notice the index 
     const { path, force = false } = args;
 
     try {
+      // Set the project context first so we can check metadata for the correct project
+      await storage.setProjectContext(path);
+
       // Check if already indexed
       if (!force) {
         const metadata = await storage.getProjectMetadata();

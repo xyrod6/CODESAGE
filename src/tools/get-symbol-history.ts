@@ -1,6 +1,7 @@
 import { storage } from '../storage/index.js';
 import { gitMetadata } from '../git/metadata.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 import { config } from '../config.js';
 
 export const getSymbolHistory: Tool = {
@@ -21,6 +22,7 @@ WHEN TO USE: Use this to understand code stability before making changes. Shows 
     const isSymbolId = target.includes(':');
 
     try {
+      await ensureProjectContext();
       if (isSymbolId) {
         const symbol = await storage.getSymbol(target);
         if (!symbol) {

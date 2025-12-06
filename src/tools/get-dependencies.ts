@@ -1,5 +1,6 @@
 import { storage } from '../storage/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const getDependencies: Tool = {
   name: 'get_dependencies',
@@ -19,6 +20,7 @@ WHEN TO USE: Use this when you need to understand what a file/symbol relies on. 
     const { target, depth = 1, types } = args;
 
     try {
+      await ensureProjectContext();
       // Check if target is a file path or symbol ID
       const isFilePath = !target.includes(':');
       let startId = target;

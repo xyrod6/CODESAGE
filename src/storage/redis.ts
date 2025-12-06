@@ -8,6 +8,7 @@ export class Storage implements IStorage {
   private redis: Redis;
   private projectName: string;
   private redisAutoStart: RedisAutoStart;
+  private projectContextLock: Promise<void> = Promise.resolve();
 
   // Lua scripts for complex operations
   private static readonly UPDATE_DEPENDENCY_SCRIPT = `
@@ -110,6 +111,11 @@ export class Storage implements IStorage {
     return path.replace(/[^a-zA-Z0-9]/g, '_');
   }
 
+  private async ensureContextStable(): Promise<void> {
+    // Wait for any pending context switches to complete
+    await this.projectContextLock;
+  }
+
   private k(key: string): string {
     return `agimake:${this.projectName}:${key}`;
   }
@@ -157,6 +163,36 @@ export class Storage implements IStorage {
 
       throw error;
     }
+  }
+
+  async setProjectContext(projectPath: string): Promise<void> {
+    // Use a simple lock to ensure context switches are atomic
+    await this.projectContextLock;
+
+    let resolveLock: () => void;
+    this.projectContextLock = new Promise((resolve) => {
+      resolveLock = resolve;
+    });
+
+    try {
+      this.projectName = this.generateProjectName(projectPath);
+    } finally {
+      resolveLock!();
+    }
+  }
+
+  async acquireLock(lockName: string, ttlMs: number = 30000): Promise<boolean> {
+    const lockKey = this.k(`lock:${lockName}`);
+    const lockValue = `${Date.now()}`;
+
+    // Try to acquire the lock using SET NX (only set if not exists) with expiration
+    const result = await this.redis.set(lockKey, lockValue, 'PX', ttlMs, 'NX');
+    return result === 'OK';
+  }
+
+  async releaseLock(lockName: string): Promise<void> {
+    const lockKey = this.k(`lock:${lockName}`);
+    await this.redis.del(lockKey);
   }
 
   async close(): Promise<void> {

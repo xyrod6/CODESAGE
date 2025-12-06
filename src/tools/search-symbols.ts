@@ -1,5 +1,6 @@
 import { storage } from '../storage/index.js';
 import { Tool } from './index.js';
+import { ensureProjectContext } from './utils.js';
 
 export const searchSymbols: Tool = {
   name: 'search_symbols',
@@ -20,6 +21,7 @@ WHEN TO USE: Use this INSTEAD of Grep/Glob when searching for classes, functions
     const { query, kind, exported_only = false, limit = 20 } = args;
 
     try {
+      await ensureProjectContext();
       // Convert wildcard pattern to regex
       const pattern = query.replace(/\*/g, '.*');
       const regex = new RegExp(pattern, 'i');
