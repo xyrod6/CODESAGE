@@ -111,3 +111,4 @@ jspm_packages/
 # Old test files
 test-*.js
 test-*.d.ts
+index-other-project.ts
