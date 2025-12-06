@@ -164,18 +164,16 @@ export class Indexer {
       console.error('Computing PageRank scores...');
       await this.dependencyResolver.computePageRank();
 
-      // Get total counts for metadata
-      const allSymbols = await storage.getAllSymbols();
-      const allDependencies = await storage.getAllDependencies();
-
-      // Update project metadata
+      // Update project metadata using counts we already have
+      // Note: For incremental indexing, these are incremental counts only
+      // For full indexing, these represent the total project stats
       await storage.updateProjectMetadata({
         root: projectPath,
         indexedAt: new Date().toISOString(),
         stats: {
           files: scanResult.files.length,
-          symbols: allSymbols.length,
-          edges: allDependencies.length,
+          symbols: stats.symbolsFound,
+          edges: stats.dependenciesFound,
         },
       });
 
@@ -217,9 +215,16 @@ export class Indexer {
     const symbols = await storage.getAllSymbols();
     const filePaths = [...new Set(symbols.map(s => s.filepath))];
 
-    // Get tracking info for each file
-    for (const filepath of filePaths) {
-      const tracking = await storage.getFileTracking(filepath);
+    // Get tracking info for each file in parallel
+    const trackingResults = await Promise.all(
+      filePaths.map(async (filepath) => {
+        const tracking = await storage.getFileTracking(filepath);
+        return { filepath, tracking };
+      })
+    );
+
+    // Populate the map with results
+    for (const { filepath, tracking } of trackingResults) {
       if (tracking) {
         tracked.set(filepath, tracking);
       }
@@ -229,38 +234,43 @@ export class Indexer {
   }
 
   private async handleDeletedFiles(deletedFiles: string[]): Promise<void> {
-    for (const filepath of deletedFiles) {
-      // Remove all symbols for this file
-      const symbols = await storage.getSymbolsByFile(filepath);
-      for (const symbol of symbols) {
-        await storage.removeSymbol(symbol.id);
-      }
+    // Process deleted files in parallel for better performance
+    await Promise.all(
+      deletedFiles.map(async (filepath) => {
+        // Remove all symbols for this file
+        const symbols = await storage.getSymbolsByFile(filepath);
+        await Promise.all(symbols.map(symbol => storage.removeSymbol(symbol.id)));
 
-      // Remove file tracking
-      await storage.removeFileTracking(filepath);
+        // Remove file tracking
+        await storage.removeFileTracking(filepath);
 
-      console.error(`Deleted file and its symbols: ${filepath}`);
-    }
+        console.error(`Deleted file and its symbols: ${filepath}`);
+      })
+    );
   }
 
   private async removeOldSymbols(filePaths: string[]): Promise<void> {
-    for (const filepath of filePaths) {
-      const symbols = await storage.getSymbolsByFile(filepath);
-      for (const symbol of symbols) {
-        await storage.removeSymbol(symbol.id);
-      }
-    }
+    // Process file cleanups in parallel
+    await Promise.all(
+      filePaths.map(async (filepath) => {
+        const symbols = await storage.getSymbolsByFile(filepath);
+        await Promise.all(symbols.map(symbol => storage.removeSymbol(symbol.id)));
+      })
+    );
   }
 
   private async updateFileTracking(files: FileInfo[]): Promise<void> {
-    for (const file of files) {
-      if (file.hash) {
-        await storage.setFileTracking(file.path, {
-          mtime: file.mtime,
-          hash: file.hash,
-        });
-      }
-    }
+    // Batch file tracking updates in parallel
+    await Promise.all(
+      files
+        .filter(file => file.hash)
+        .map(file =>
+          storage.setFileTracking(file.path, {
+            mtime: file.mtime,
+            hash: file.hash!,
+          })
+        )
+    );
   }
 
   private async attachGitMetadata(symbols: Symbol[], files: FileInfo[]): Promise<void> {
@@ -270,17 +280,24 @@ export class Indexer {
 
     const metadataByFile = new Map<string, Awaited<ReturnType<typeof gitMetadata.getMetadata>>>();
 
-    for (const file of files) {
-      if (metadataByFile.has(file.path)) continue;
+    // Fetch git metadata in parallel for all files
+    const uniqueFiles = Array.from(new Set(files.map(f => f.path))).filter(path => !metadataByFile.has(path));
 
-      try {
-        const metadata = await gitMetadata.getMetadata(file.path, file.hash);
-        metadataByFile.set(file.path, metadata);
-      } catch (error) {
-        console.error(`Failed to fetch git metadata for ${file.path}:`, error);
-      }
-    }
+    await Promise.all(
+      uniqueFiles.map(async (filepath) => {
+        const file = files.find(f => f.path === filepath);
+        if (!file) return;
 
+        try {
+          const metadata = await gitMetadata.getMetadata(file.path, file.hash);
+          metadataByFile.set(file.path, metadata);
+        } catch (error) {
+          console.error(`Failed to fetch git metadata for ${file.path}:`, error);
+        }
+      })
+    );
+
+    // Attach metadata to symbols
     for (const symbol of symbols) {
       const metadata = metadataByFile.get(symbol.filepath);
       if (metadata) {
