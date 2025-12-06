@@ -1,7 +1,8 @@
 import Parser from 'tree-sitter';
-import c from 'tree-sitter-c';
-import cpp from 'tree-sitter-cpp';
+import cppModule from 'tree-sitter-cpp';
+import cModule from 'tree-sitter-c';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -20,8 +21,8 @@ export class CppParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.cLanguage = c;
-    this.cppLanguage = cpp;
+    this.cLanguage = cModule.language;
+    this.cppLanguage = cppModule.language;
     this.isCppFile = false;
   }
 
@@ -72,7 +73,7 @@ export class CppParser extends BaseParser {
           context.currentNamespace = namespaceSymbol.name;
 
           // Process namespace body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               this.walkNode(child, context, symbols, dependencies, namespaceSymbol);
@@ -90,7 +91,7 @@ export class CppParser extends BaseParser {
           context.currentClass = classSymbol.name;
 
           // Process class body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'field_declaration' ||
@@ -110,7 +111,7 @@ export class CppParser extends BaseParser {
           symbols.push(unionSymbol);
 
           // Process union body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'field_declaration') {
@@ -127,7 +128,7 @@ export class CppParser extends BaseParser {
           symbols.push(funcSymbol);
 
           // Process function body for local variables
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             this.extractLocalVariables(body, context, symbols, funcSymbol);
           }
@@ -169,10 +170,10 @@ export class CppParser extends BaseParser {
   }
 
   private extractNamespace(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -194,20 +195,20 @@ export class CppParser extends BaseParser {
   }
 
   private extractClassOrStruct(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const kind = node.type === 'class_specifier' ? 'class' : 'interface';
     const keyword = node.type === 'class_specifier' ? 'class' : 'struct';
 
     // Check for inheritance
-    const baseClauseNode = node.childForFieldName('base_class_clause');
+    const baseClauseNode = getChildForFieldName(node, 'base_class_clause');
     let signature = `${keyword} ${name}`;
     if (baseClauseNode) {
-      signature += ` : ${baseClauseNode.text}`;
+      signature += ` : ${getNodeText(baseClauseNode, context.content)}`;
     }
 
     return {
@@ -229,10 +230,10 @@ export class CppParser extends BaseParser {
   }
 
   private extractUnion(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -254,23 +255,23 @@ export class CppParser extends BaseParser {
   }
 
   private extractFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const declaratorNode = node.childForFieldName('declarator');
+    const declaratorNode = getChildForFieldName(node, 'declarator');
     if (!declaratorNode) return null;
 
     // Extract function name from declarator
     const nameNode = this.findFunctionName(declaratorNode);
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     // Get return type
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
     let signature = '';
     if (typeNode) {
-      signature = `${typeNode.text} `;
+      signature = `${getNodeText(typeNode, context.content)} `;
     }
-    signature += declaratorNode.text;
+    signature += getNodeText(declaratorNode, context.content);
 
     // Determine if it's a method
     const kind = context.currentClass ? 'method' : 'function';
@@ -295,20 +296,20 @@ export class CppParser extends BaseParser {
 
   private extractDeclaration(node: Parser.SyntaxNode, context: SymbolContext, symbols: Symbol[], parent?: Symbol): void {
     const declarators = node.children.filter(child => child.type === 'declarator');
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
 
     for (const declarator of declarators) {
       const nameNode = this.findDeclaratorName(declarator);
       if (!nameNode) continue;
 
-      const name = nameNode.text;
+      const name = getNodeText(nameNode, context.content);
       const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
       let signature = '';
       if (typeNode) {
-        signature += `${typeNode.text} `;
+        signature += `${getNodeText(typeNode, context.content)} `;
       }
-      signature += declarator.text;
+      signature += getNodeText(declarator, context.content);
 
       // Determine if it's a function declaration
       if (this.isFunctionDeclarator(declarator)) {
@@ -352,24 +353,24 @@ export class CppParser extends BaseParser {
 
   private extractFieldDeclaration(node: Parser.SyntaxNode, context: SymbolContext, parent?: Symbol): Symbol[] {
     const symbols: Symbol[] = [];
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
     const declarators = node.children.filter(child => child.type === 'field_declarator');
 
     for (const declarator of declarators) {
-      const nameNode = declarator.childForFieldName('declarator');
+      const nameNode = getChildForFieldName(declarator, 'declarator');
       if (!nameNode) continue;
 
-      const name = nameNode.text;
+      const name = getNodeText(nameNode, context.content);
       const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
       let signature = name;
       if (typeNode) {
-        signature = `${name}: ${typeNode.text}`;
+        signature = `${name}: ${getNodeText(typeNode, context.content)}`;
       }
 
-      const bitfieldNode = declarator.childForFieldName('bitfield');
+      const bitfieldNode = getChildForFieldName(declarator, 'bitfield');
       if (bitfieldNode) {
-        signature += `: ${bitfieldNode.text}`;
+        signature += `: ${getNodeText(bitfieldNode, context.content)}`;
       }
 
       symbols.push({
@@ -394,16 +395,16 @@ export class CppParser extends BaseParser {
   }
 
   private extractMacro(node: Parser.SyntaxNode, context: SymbolContext, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const valueNode = node.childForFieldName('value');
+    const valueNode = getChildForFieldName(node, 'value');
     let signature = `#define ${name}`;
     if (valueNode) {
-      signature += ` ${valueNode.text}`;
+      signature += ` ${getNodeText(valueNode, context.content)}`;
     }
 
     return {
@@ -425,9 +426,9 @@ export class CppParser extends BaseParser {
   }
 
   private extractInclude(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const pathNode = node.childForFieldName('path');
+    const pathNode = getChildForFieldName(node, 'path');
     if (pathNode) {
-      const includePath = pathNode.text.replace(/[<>"]/g, '');
+      const includePath = getNodeText(pathNode, context.content).replace(/[<>"]/g, '');
       context.includes.add(includePath);
 
       dependencies.push({

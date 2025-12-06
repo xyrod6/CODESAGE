@@ -1,6 +1,7 @@
 import Parser from 'tree-sitter';
-import python from 'tree-sitter-python';
+import pythonModule from 'tree-sitter-python';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -17,7 +18,7 @@ export class PythonParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.language = python;
+    this.language = pythonModule.language;
     this.parser.setLanguage(this.language);
   }
 
@@ -54,7 +55,7 @@ export class PythonParser extends BaseParser {
           context.currentClass = classSymbol.name;
 
           // Process class body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               this.walkNode(child, context, symbols, dependencies, classSymbol);
@@ -70,7 +71,7 @@ export class PythonParser extends BaseParser {
           symbols.push(funcSymbol);
 
           // Process function body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               this.walkNode(child, context, symbols, dependencies, funcSymbol);
@@ -85,7 +86,7 @@ export class PythonParser extends BaseParser {
           const left = node.child(0);
           const right = node.child(2); // Skip the '='
 
-          if (left.type === 'identifier' && (!context.currentClass || right?.text.includes('self.'))) {
+          if (left && left.type === 'identifier' && (!context.currentClass || (right && getNodeText(right, context.content).includes('self.')))) {
             const varSymbol = this.extractVariable(node, context, parent);
             if (varSymbol) symbols.push(varSymbol);
           }
@@ -123,17 +124,17 @@ export class PythonParser extends BaseParser {
   }
 
   private extractClass(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     // Check for inheritance
-    const superClassList = node.childForFieldName('superclasses');
+    const superClassList = getChildForFieldName(node, 'superclasses');
     let signature = `class ${name}`;
     if (superClassList) {
-      signature += superClassList.text;
+      signature += getNodeText(superClassList, context.content);
     }
 
     return {
@@ -155,18 +156,18 @@ export class PythonParser extends BaseParser {
   }
 
   private extractFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const parametersNode = node.childForFieldName('parameters');
-    const returnTypeNode = node.childForFieldName('return_type');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const returnTypeNode = getChildForFieldName(node, 'return_type');
 
-    let signature = `def ${name}(${parametersNode?.text || ''})`;
+    let signature = `def ${name}(${getNodeText(parametersNode || { startIndex: 0, endIndex: 0 } as any, context.content) || ''})`;
     if (returnTypeNode) {
-      signature += ` -> ${returnTypeNode.text}`;
+      signature += ` -> ${getNodeText(returnTypeNode, context.content)}`;
     }
 
     // Determine if it's a method
@@ -194,7 +195,7 @@ export class PythonParser extends BaseParser {
     const left = node.child(0);
     if (!left || left.type !== 'identifier') return null;
 
-    const name = left.text;
+    const name = getNodeText(left, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     // Determine if it's a constant (ALL_CAPS)
@@ -209,7 +210,7 @@ export class PythonParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring: undefined,
       parent: parent?.id,
       children: [],
@@ -219,9 +220,9 @@ export class PythonParser extends BaseParser {
   }
 
   private extractImport(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (nameNode) {
-      const moduleName = nameNode.text;
+      const moduleName = getNodeText(nameNode, context.content);
       context.imports.add(moduleName);
 
       dependencies.push({
@@ -237,9 +238,9 @@ export class PythonParser extends BaseParser {
   }
 
   private extractFromImport(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const moduleNameNode = node.childForFieldName('module_name');
+    const moduleNameNode = getChildForFieldName(node, 'module_name');
     if (moduleNameNode) {
-      const moduleName = moduleNameNode.text;
+      const moduleName = getNodeText(moduleNameNode, context.content);
       context.imports.add(moduleName);
 
       dependencies.push({
@@ -256,16 +257,16 @@ export class PythonParser extends BaseParser {
 
   private extractDocstring(node: Parser.SyntaxNode, content: string): string | undefined {
     // Check if the first child of a function/class body is a docstring
-    const body = node.childForFieldName('body');
+    const body = getChildForFieldName(node, 'body');
     if (!body) return undefined;
 
     // Look for the first expression statement that contains a string
     for (const child of body.children) {
       if (child.type === 'expression_statement') {
-        const stringNode = child.childForFieldName('value');
+        const stringNode = getChildForFieldName(child, 'value');
         if (stringNode && (stringNode.type === 'string' || stringNode.type === 'concatenated_string')) {
           // Extract the docstring content
-          const text = stringNode.text;
+          const text = getNodeText(stringNode, content);
           // Remove surrounding quotes and escape sequences
           let docstring = text.replace(/^['"]{1,3}|['"]{1,3}$/g, '');
 

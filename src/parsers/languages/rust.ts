@@ -1,6 +1,7 @@
 import Parser from 'tree-sitter';
-import rust from 'tree-sitter-rust';
+import rustModule from 'tree-sitter-rust';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -17,7 +18,7 @@ export class RustParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.language = rust;
+    this.language = rustModule;
     this.parser.setLanguage(this.language);
   }
 
@@ -136,9 +137,9 @@ export class RustParser extends BaseParser {
 
       case 'impl_item':
         // Extract the type being implemented
-        const typeNode = node.childForFieldName('type');
+        const typeNode = getChildForFieldName(node, 'type');
         if (typeNode) {
-          const implType = typeNode.text;
+          const implType = getNodeText(typeNode, context.content);
           context.implBlock = implType;
 
           // Process impl body
@@ -161,7 +162,7 @@ export class RustParser extends BaseParser {
           symbols.push(funcSymbol);
 
           // Process function body for local variables
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             this.extractLocalVars(body, context, symbols, funcSymbol);
           }
@@ -204,10 +205,10 @@ export class RustParser extends BaseParser {
   }
 
   private extractModule(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -224,22 +225,22 @@ export class RustParser extends BaseParser {
       parent: parent?.id,
       children: [],
       // In Rust, pub modules are exported
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractStruct(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const genericParams = node.childForFieldName('generic_parameters');
+    const genericParams = getChildForFieldName(node, 'generic_parameters');
     let signature = `struct ${name}`;
     if (genericParams) {
-      signature += genericParams.text;
+      signature += getNodeText(genericParams, context.content);
     }
 
     return {
@@ -255,22 +256,22 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractEnum(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const genericParams = node.childForFieldName('generic_parameters');
+    const genericParams = getChildForFieldName(node, 'generic_parameters');
     let signature = `enum ${name}`;
     if (genericParams) {
-      signature += genericParams.text;
+      signature += getNodeText(genericParams, context.content);
     }
 
     return {
@@ -286,22 +287,22 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractTrait(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const genericParams = node.childForFieldName('generic_parameters');
+    const genericParams = getChildForFieldName(node, 'generic_parameters');
     let signature = `trait ${name}`;
     if (genericParams) {
-      signature += genericParams.text;
+      signature += getNodeText(genericParams, context.content);
     }
 
     return {
@@ -317,29 +318,29 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const parametersNode = node.childForFieldName('parameters');
-    const returnTypeNode = node.childForFieldName('return_type');
-    const genericParams = node.childForFieldName('generic_parameters');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const returnTypeNode = getChildForFieldName(node, 'return_type');
+    const genericParams = getChildForFieldName(node, 'generic_parameters');
 
     let signature = `fn ${name}`;
     if (genericParams) {
-      signature += genericParams.text;
+      signature += getNodeText(genericParams, context.content);
     }
-    signature += `(${parametersNode?.text || ''})`;
+    signature += `(${(parametersNode ? getNodeText(parametersNode, context.content) : "") || ''})`;
     if (returnTypeNode) {
-      signature += ` -> ${returnTypeNode.text}`;
+      signature += ` -> ${getNodeText(returnTypeNode, context.content)}`;
     }
 
     // Determine if it's a method (part of an impl block)
@@ -358,27 +359,27 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractConstant(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
-    const valueNode = node.childForFieldName('value');
+    const typeNode = getChildForFieldName(node, 'type');
+    const valueNode = getChildForFieldName(node, 'value');
 
     let signature = `const ${name}`;
     if (typeNode) {
-      signature += `: ${typeNode.text}`;
+      signature += `: ${getNodeText(typeNode, context.content)}`;
     }
     if (valueNode) {
-      signature += ` = ${valueNode.text}`;
+      signature += ` = ${getNodeText(valueNode, context.content)}`;
     }
 
     return {
@@ -394,27 +395,27 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractStatic(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
-    const valueNode = node.childForFieldName('value');
+    const typeNode = getChildForFieldName(node, 'type');
+    const valueNode = getChildForFieldName(node, 'value');
 
     let signature = `static ${name}`;
     if (typeNode) {
-      signature += `: ${typeNode.text}`;
+      signature += `: ${getNodeText(typeNode, context.content)}`;
     }
     if (valueNode) {
-      signature += ` = ${valueNode.text}`;
+      signature += ` = ${getNodeText(valueNode, context.content)}`;
     }
 
     return {
@@ -430,26 +431,26 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractTypeAlias(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
-    const genericParams = node.childForFieldName('generic_parameters');
+    const typeNode = getChildForFieldName(node, 'type');
+    const genericParams = getChildForFieldName(node, 'generic_parameters');
 
     let signature = `type ${name}`;
     if (genericParams) {
-      signature += genericParams.text;
+      signature += getNodeText(genericParams, context.content);
     }
-    signature += ` = ${typeNode?.text || ''}`;
+    signature += ` = ${(typeNode ? getNodeText(typeNode, context.content) : "") || ''}`;
 
     return {
       id,
@@ -464,23 +465,23 @@ export class RustParser extends BaseParser {
       docstring,
       parent: parent?.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractStructField(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
 
     let signature = name;
     if (typeNode) {
-      signature += `: ${typeNode.text}`;
+      signature += `: ${getNodeText(typeNode, context.content)}`;
     }
 
     return {
@@ -496,16 +497,16 @@ export class RustParser extends BaseParser {
       docstring: undefined,
       parent: parent.id,
       children: [],
-      exported: node.children.some(child => child.type === 'visibility_modifier' && child.text === 'pub'),
+      exported: node.children.some(child => child.type === 'visibility_modifier' && getNodeText(child, context.content) === 'pub'),
       language: this.getLanguage(),
     };
   }
 
   private extractEnumVariant(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -517,7 +518,7 @@ export class RustParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring: undefined,
       parent: parent.id,
       children: [],
@@ -540,21 +541,21 @@ export class RustParser extends BaseParser {
   }
 
   private extractLocalVar(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const patternNode = node.childForFieldName('pattern');
+    const patternNode = getChildForFieldName(node, 'pattern');
     if (!patternNode || patternNode.type !== 'identifier') return null;
 
-    const name = patternNode.text;
+    const name = getNodeText(patternNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
-    const valueNode = node.childForFieldName('value');
+    const typeNode = getChildForFieldName(node, 'type');
+    const valueNode = getChildForFieldName(node, 'value');
 
     let signature = `let ${name}`;
     if (typeNode) {
-      signature += `: ${typeNode.text}`;
+      signature += `: ${getNodeText(typeNode, context.content)}`;
     }
     if (valueNode) {
-      signature += ` = ${valueNode.text}`;
+      signature += ` = ${getNodeText(valueNode, context.content)}`;
     }
 
     return {
@@ -576,9 +577,9 @@ export class RustParser extends BaseParser {
   }
 
   private extractUseDeclaration(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const argumentNode = node.childForFieldName('argument');
+    const argumentNode = getChildForFieldName(node, 'argument');
     if (argumentNode) {
-      const usePath = argumentNode.text;
+      const usePath = getNodeText(argumentNode, context.content);
       context.imports.add(usePath);
 
       dependencies.push({

@@ -1,6 +1,7 @@
 import Parser from 'tree-sitter';
-import go from 'tree-sitter-go';
+import goModule from 'tree-sitter-go';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -16,7 +17,7 @@ export class GoParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.language = go;
+    this.language = goModule;
     this.parser.setLanguage(this.language);
   }
 
@@ -50,9 +51,9 @@ export class GoParser extends BaseParser {
         // Extract package declaration
         for (const child of node.children) {
           if (child.type === 'package_clause') {
-            const nameNode = child.childForFieldName('name');
+            const nameNode = getChildForFieldName(child, 'name');
             if (nameNode) {
-              context.currentPackage = nameNode.text;
+              context.currentPackage = getNodeText(nameNode, context.content);
             }
           }
           // Process other top-level declarations
@@ -61,7 +62,7 @@ export class GoParser extends BaseParser {
         break;
 
       case 'type_declaration':
-        const typeSpec = node.childForFieldName('type_spec');
+        const typeSpec = getChildForFieldName(node, 'type_spec');
         if (typeSpec) {
           const typeSymbol = this.extractType(typeSpec, context, docstring, parent);
           if (typeSymbol) symbols.push(typeSymbol);
@@ -74,12 +75,12 @@ export class GoParser extends BaseParser {
           symbols.push(funcSymbol);
 
           // Process function body for local variables
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'short_var_declaration') {
-                const varSymbol = this.extractShortVar(child, context, funcSymbol);
-                if (varSymbol) symbols.push(varSymbol);
+                const varSymbols = this.extractShortVar(child, context, funcSymbol);
+                symbols.push(...varSymbols);
               }
             }
           }
@@ -131,16 +132,16 @@ export class GoParser extends BaseParser {
   }
 
   private extractType(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
     let signature = `type ${name}`;
     if (typeNode) {
-      signature += ` ${typeNode.text}`;
+      signature += ` ${getNodeText(typeNode, context.content)}`;
     }
 
     // Determine if it's a struct or interface
@@ -167,18 +168,18 @@ export class GoParser extends BaseParser {
   }
 
   private extractFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const parametersNode = node.childForFieldName('parameters');
-    const resultNode = node.childForFieldName('result');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const resultNode = getChildForFieldName(node, 'result');
 
-    let signature = `func ${name}(${parametersNode?.text || ''})`;
+    let signature = `func ${name}(${parametersNode ? getNodeText(parametersNode, context.content) : ''})`;
     if (resultNode) {
-      signature += ` ${resultNode.text}`;
+      signature += ` ${getNodeText(resultNode, context.content)}`;
     }
 
     return {
@@ -200,23 +201,23 @@ export class GoParser extends BaseParser {
   }
 
   private extractMethod(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const receiverNode = node.childForFieldName('receiver');
-    const parametersNode = node.childForFieldName('parameters');
-    const resultNode = node.childForFieldName('result');
+    const receiverNode = getChildForFieldName(node, 'receiver');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const resultNode = getChildForFieldName(node, 'result');
 
     let signature = `func `;
     if (receiverNode) {
-      signature += `${receiverNode.text} `;
+      signature += `${getNodeText(receiverNode, context.content)} `;
     }
-    signature += `${name}(${parametersNode?.text || ''})`;
+    signature += `${name}(${parametersNode ? getNodeText(parametersNode, context.content) : ''})`;
     if (resultNode) {
-      signature += ` ${resultNode.text}`;
+      signature += ` ${getNodeText(resultNode, context.content)}`;
     }
 
     return {
@@ -242,20 +243,20 @@ export class GoParser extends BaseParser {
 
     for (const child of node.children) {
       if (child.type === 'var_spec') {
-        const nameNode = child.childForFieldName('name');
+        const nameNode = getChildForFieldName(child, 'name');
         if (nameNode) {
-          const name = nameNode.text;
+          const name = getNodeText(nameNode, context.content);
           const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-          const typeNode = child.childForFieldName('type');
-          const valueNode = child.childForFieldName('value');
+          const typeNode = getChildForFieldName(child, 'type');
+          const valueNode = getChildForFieldName(child, 'value');
 
           let signature = `var ${name}`;
           if (typeNode) {
-            signature += ` ${typeNode.text}`;
+            signature += ` ${getNodeText(typeNode, context.content)}`;
           }
           if (valueNode) {
-            signature += ` = ${valueNode.text}`;
+            signature += ` = ${getNodeText(valueNode, context.content)}`;
           }
 
           symbols.push({
@@ -286,20 +287,20 @@ export class GoParser extends BaseParser {
 
     for (const child of node.children) {
       if (child.type === 'const_spec') {
-        const nameNode = child.childForFieldName('name');
+        const nameNode = getChildForFieldName(child, 'name');
         if (nameNode) {
-          const name = nameNode.text;
+          const name = getNodeText(nameNode, context.content);
           const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-          const typeNode = child.childForFieldName('type');
-          const valueNode = child.childForFieldName('value');
+          const typeNode = getChildForFieldName(child, 'type');
+          const valueNode = getChildForFieldName(child, 'value');
 
           let signature = `const ${name}`;
           if (typeNode) {
-            signature += ` ${typeNode.text}`;
+            signature += ` ${getNodeText(typeNode, context.content)}`;
           }
           if (valueNode) {
-            signature += ` = ${valueNode.text}`;
+            signature += ` = ${getNodeText(valueNode, context.content)}`;
           }
 
           symbols.push({
@@ -328,11 +329,11 @@ export class GoParser extends BaseParser {
   private extractShortVar(node: Parser.SyntaxNode, context: SymbolContext, parent?: Symbol): Symbol[] {
     const symbols: Symbol[] = [];
 
-    const left = node.childForFieldName('left');
+    const left = getChildForFieldName(node, 'left');
     if (left && left.type === 'identifier_list') {
       for (const child of left.children) {
         if (child.type === 'identifier') {
-          const name = child.text;
+          const name = getNodeText(child, context.content);
           const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
           symbols.push({
@@ -344,7 +345,7 @@ export class GoParser extends BaseParser {
               start: { line: node.startPosition.row + 1, column: node.startPosition.column },
               end: { line: node.endPosition.row + 1, column: node.endPosition.column },
             },
-            signature: node.text,
+            signature: getNodeText(node, context.content),
             docstring: undefined,
             parent: parent?.id,
             children: [],
@@ -359,9 +360,9 @@ export class GoParser extends BaseParser {
   }
 
   private extractImport(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const pathNode = node.childForFieldName('path');
+    const pathNode = getChildForFieldName(node, 'path');
     if (pathNode) {
-      const importPath = pathNode.text.replace(/["']/g, '');
+      const importPath = getNodeText(pathNode, context.content).replace(/["']/g, '');
 
       dependencies.push({
         from: context.filepath,
@@ -376,15 +377,15 @@ export class GoParser extends BaseParser {
   }
 
   private extractImportSpec(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const nameNode = node.childForFieldName('name');
-    const pathNode = node.childForFieldName('path');
+    const nameNode = getChildForFieldName(node, 'name');
+    const pathNode = getChildForFieldName(node, 'path');
 
     if (pathNode) {
-      const importPath = pathNode.text.replace(/["']/g, '');
+      const importPath = getNodeText(pathNode, context.content).replace(/["']/g, '');
 
       // Handle alias
       if (nameNode && nameNode.type === 'identifier') {
-        context.imports.set(nameNode.text, importPath);
+        context.imports.set(getNodeText(nameNode, context.content), importPath);
       }
 
       dependencies.push({

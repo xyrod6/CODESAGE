@@ -1,6 +1,7 @@
-import tsParser from 'tree-sitter-typescript';
+import tsModule from 'tree-sitter-typescript';
 import Parser from 'tree-sitter';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind, DependencyType } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -18,8 +19,8 @@ export class TypeScriptParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.tsLanguage = tsParser.typescript;
-    this.tsxLanguage = tsParser.tsx;
+    this.tsLanguage = tsModule.typescript;
+    this.tsxLanguage = tsModule.tsx;
 
     // Initialize with TypeScript by default
     this.parser.setLanguage(this.tsLanguage);
@@ -69,7 +70,7 @@ export class TypeScriptParser extends BaseParser {
           symbols.push(classSymbol);
 
           // Process class body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               this.walkNode(child, context, symbols, dependencies, classSymbol);
@@ -84,7 +85,7 @@ export class TypeScriptParser extends BaseParser {
           symbols.push(interfaceSymbol);
 
           // Process interface body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'property_signature') {
@@ -109,7 +110,7 @@ export class TypeScriptParser extends BaseParser {
           symbols.push(enumSymbol);
 
           // Process enum members
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'property_identifier') {
@@ -132,7 +133,7 @@ export class TypeScriptParser extends BaseParser {
       case 'variable_declaration':
         for (const child of node.children) {
           if (child.type === 'variable_declarator') {
-            const value = child.childForFieldName('value');
+            const value = getChildForFieldName(child, 'value');
             if (value && (value.type === 'arrow_function' || value.type === 'function_expression')) {
               const arrowFuncSymbol = this.extractVariableFunction(child, context, docstring, parent);
               if (arrowFuncSymbol) symbols.push(arrowFuncSymbol);
@@ -165,7 +166,7 @@ export class TypeScriptParser extends BaseParser {
           symbols.push(namespaceSymbol);
 
           // Process namespace body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               this.walkNode(child, context, symbols, dependencies, namespaceSymbol);
@@ -175,7 +176,7 @@ export class TypeScriptParser extends BaseParser {
         break;
 
       case 'export_statement':
-        const declaration = node.childForFieldName('declaration');
+        const declaration = getChildForFieldName(node, 'declaration');
         if (declaration) {
           this.walkNode(declaration, context, symbols, dependencies, parent);
         }
@@ -200,10 +201,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractClass(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -217,7 +218,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -227,10 +228,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractInterface(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -244,7 +245,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -254,10 +255,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractTypeAlias(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -271,7 +272,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -281,10 +282,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractEnum(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -298,7 +299,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -308,10 +309,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -325,7 +326,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -335,10 +336,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractMethod(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -350,7 +351,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: node.text,
+      signature: getNodeText(node, context.content),
       docstring: this.extractJSDoc(node, context.content),
       parent: parent.id,
       children: [],
@@ -360,13 +361,13 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractField(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
 
     return {
       id,
@@ -377,7 +378,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: `${name}${typeNode ? `: ${typeNode.text}` : ''}`,
+      signature: `${name}${typeNode ? `: ${getNodeText(typeNode, context.content)}` : ''}`,
       docstring: this.extractJSDoc(node, context.content),
       parent: parent.id,
       children: [],
@@ -387,13 +388,13 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractInterfaceProperty(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
 
     return {
       id,
@@ -404,7 +405,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: `${name}${typeNode ? `: ${typeNode.text}` : ''}`,
+      signature: `${name}${typeNode ? `: ${getNodeText(typeNode, context.content)}` : ''}`,
       docstring: this.extractJSDoc(node, context.content),
       parent: parent.id,
       children: [],
@@ -414,7 +415,7 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractEnumMember(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const name = node.text;
+    const name = getNodeText(node, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -436,13 +437,13 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractVariableFunction(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const valueNode = node.childForFieldName('value');
+    const valueNode = getChildForFieldName(node, 'value');
     const isExported = node.parent?.type === 'export_statement';
 
     return {
@@ -454,7 +455,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: valueNode ? valueNode.text : node.text,
+      signature: valueNode ? getNodeText(valueNode, context.content) : getNodeText(node, context.content),
       docstring,
       parent: parent?.id,
       children: [],
@@ -464,13 +465,13 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractVariable(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const typeNode = node.childForFieldName('type');
+    const typeNode = getChildForFieldName(node, 'type');
     const isExported = node.parent?.type === 'export_statement';
 
     // Determine if it's a constant (const) or variable (let/var)
@@ -486,7 +487,7 @@ export class TypeScriptParser extends BaseParser {
         start: { line: node.startPosition.row + 1, column: node.startPosition.column },
         end: { line: node.endPosition.row + 1, column: node.endPosition.column },
       },
-      signature: `${name}${typeNode ? `: ${typeNode.text}` : ''}`,
+      signature: `${name}${typeNode ? `: ${getNodeText(typeNode, context.content)}` : ''}`,
       docstring,
       parent: parent?.id,
       children: [],
@@ -496,10 +497,10 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractNamespace(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     const isExported = node.parent?.type === 'export_statement';
@@ -523,9 +524,9 @@ export class TypeScriptParser extends BaseParser {
   }
 
   private extractImport(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const sourceNode = node.childForFieldName('source');
+    const sourceNode = getChildForFieldName(node, 'source');
     if (sourceNode) {
-      const source = sourceNode.text.replace(/['"]/g, '');
+      const source = getNodeText(sourceNode, context.content).replace(/['"]/g, '');
 
       dependencies.push({
         from: context.filepath,

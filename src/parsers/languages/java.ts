@@ -1,6 +1,7 @@
 import Parser from 'tree-sitter';
-import java from 'tree-sitter-java';
+import javaModule from 'tree-sitter-java';
 import { Parser as BaseParser, ParseResult, Symbol, DependencyEdge, SymbolKind } from '../base.js';
+import { getChildForFieldName, getNodeText, findDescendantOfType, getChildrenOfType } from '../utils.js';
 
 interface SymbolContext {
   filepath: string;
@@ -17,7 +18,7 @@ export class JavaParser extends BaseParser {
   constructor() {
     super();
     this.parser = new Parser();
-    this.language = java;
+    this.language = javaModule;
     this.parser.setLanguage(this.language);
   }
 
@@ -51,9 +52,9 @@ export class JavaParser extends BaseParser {
         // Extract package declaration
         for (const child of node.children) {
           if (child.type === 'package_declaration') {
-            const nameNode = child.childForFieldName('name');
+            const nameNode = getChildForFieldName(child, 'name');
             if (nameNode) {
-              context.currentPackage = nameNode.text;
+              context.currentPackage = getNodeText(nameNode, context.content);
             }
           }
           // Process other top-level declarations
@@ -68,7 +69,7 @@ export class JavaParser extends BaseParser {
           context.currentClass = classSymbol.name;
 
           // Process class body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'field_declaration' ||
@@ -89,7 +90,7 @@ export class JavaParser extends BaseParser {
           context.currentClass = interfaceSymbol.name;
 
           // Process interface body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'field_declaration' ||
@@ -108,7 +109,7 @@ export class JavaParser extends BaseParser {
           symbols.push(enumSymbol);
 
           // Process enum body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             for (const child of body.children) {
               if (child.type === 'enum_constant') {
@@ -126,7 +127,7 @@ export class JavaParser extends BaseParser {
           symbols.push(methodSymbol);
 
           // Process method body for local variables
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             this.extractLocalVariables(body, context, symbols, methodSymbol);
           }
@@ -139,7 +140,7 @@ export class JavaParser extends BaseParser {
           symbols.push(constructorSymbol);
 
           // Process constructor body
-          const body = node.childForFieldName('body');
+          const body = getChildForFieldName(node, 'body');
           if (body) {
             this.extractLocalVariables(body, context, symbols, constructorSymbol);
           }
@@ -171,22 +172,22 @@ export class JavaParser extends BaseParser {
   }
 
   private extractClass(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     // Check for inheritance and interfaces
-    const superClass = node.childForFieldName('superclass');
-    const interfaces = node.childForFieldName('interfaces');
+    const superClass = getChildForFieldName(node, 'superclass');
+    const interfaces = getChildForFieldName(node, 'interfaces');
 
     let signature = `class ${name}`;
     if (superClass) {
-      signature += ` extends ${superClass.text}`;
+      signature += ` extends ${getNodeText(superClass, context.content)}`;
     }
     if (interfaces) {
-      signature += ` implements ${interfaces.text}`;
+      signature += ` implements ${getNodeText(interfaces, context.content)}`;
     }
 
     return {
@@ -208,17 +209,17 @@ export class JavaParser extends BaseParser {
   }
 
   private extractInterface(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const interfaces = node.childForFieldName('interfaces');
+    const interfaces = getChildForFieldName(node, 'interfaces');
 
     let signature = `interface ${name}`;
     if (interfaces) {
-      signature += ` extends ${interfaces.text}`;
+      signature += ` extends ${getNodeText(interfaces, context.content)}`;
     }
 
     return {
@@ -240,17 +241,17 @@ export class JavaParser extends BaseParser {
   }
 
   private extractEnum(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const interfaces = node.childForFieldName('interfaces');
+    const interfaces = getChildForFieldName(node, 'interfaces');
 
     let signature = `enum ${name}`;
     if (interfaces) {
-      signature += ` implements ${interfaces.text}`;
+      signature += ` implements ${getNodeText(interfaces, context.content)}`;
     }
 
     return {
@@ -272,26 +273,26 @@ export class JavaParser extends BaseParser {
   }
 
   private extractMethod(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const parametersNode = node.childForFieldName('parameters');
-    const typeNode = node.childForFieldName('type');
-    const modifiers = node.childForFieldName('modifiers');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const typeNode = getChildForFieldName(node, 'type');
+    const modifiers = getChildForFieldName(node, 'modifiers');
 
     let signature = name;
     if (parametersNode) {
-      signature += `(${parametersNode.text})`;
+      signature += `(${getNodeText(parametersNode, context.content)})`;
     }
     if (typeNode) {
-      signature += `: ${typeNode.text}`;
+      signature += `: ${getNodeText(typeNode, context.content)}`;
     }
 
     // Check if it's public
-    const isPublic = modifiers ? this.hasPublicModifier(modifiers) : true;
+    const isPublic = modifiers ? this.hasPublicModifier(modifiers, context) : true;
 
     return {
       id,
@@ -312,21 +313,21 @@ export class JavaParser extends BaseParser {
   }
 
   private extractConstructor(node: Parser.SyntaxNode, context: SymbolContext, docstring?: string, parent?: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
-    const parametersNode = node.childForFieldName('parameters');
-    const modifiers = node.childForFieldName('modifiers');
+    const parametersNode = getChildForFieldName(node, 'parameters');
+    const modifiers = getChildForFieldName(node, 'modifiers');
 
     let signature = name;
     if (parametersNode) {
-      signature += `(${parametersNode.text})`;
+      signature += `(${getNodeText(parametersNode, context.content)})`;
     }
 
-    const isPublic = modifiers ? this.hasPublicModifier(modifiers) : true;
+    const isPublic = modifiers ? this.hasPublicModifier(modifiers, context) : true;
 
     return {
       id,
@@ -348,29 +349,29 @@ export class JavaParser extends BaseParser {
 
   private extractFieldDeclaration(node: Parser.SyntaxNode, context: SymbolContext, parent?: Symbol): Symbol[] {
     const symbols: Symbol[] = [];
-    const typeNode = node.childForFieldName('type');
-    const modifiers = node.childForFieldName('modifiers');
-    const declaratorList = node.childForFieldName('declarator');
+    const typeNode = getChildForFieldName(node, 'type');
+    const modifiers = getChildForFieldName(node, 'modifiers');
+    const declaratorList = getChildForFieldName(node, 'declarator');
 
-    const isPublic = modifiers ? this.hasPublicModifier(modifiers) : false;
-    const isStatic = modifiers ? this.hasStaticModifier(modifiers) : false;
+    const isPublic = modifiers ? this.hasPublicModifier(modifiers, context) : false;
+    const isStatic = modifiers ? this.hasStaticModifier(modifiers, context) : false;
 
     if (declaratorList) {
       for (const child of declaratorList.children) {
         if (child.type === 'variable_declarator') {
-          const nameNode = child.childForFieldName('name');
+          const nameNode = getChildForFieldName(child, 'name');
           if (nameNode) {
-            const name = nameNode.text;
+            const name = getNodeText(nameNode, context.content);
             const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
             let signature = name;
             if (typeNode) {
-              signature += `: ${typeNode.text}`;
+              signature += `: ${getNodeText(typeNode, context.content)}`;
             }
 
-            const valueNode = child.childForFieldName('value');
+            const valueNode = getChildForFieldName(child, 'value');
             if (valueNode) {
-              signature += ` = ${valueNode.text}`;
+              signature += ` = ${getNodeText(valueNode, context.content)}`;
             }
 
             symbols.push({
@@ -398,10 +399,10 @@ export class JavaParser extends BaseParser {
   }
 
   private extractEnumConstant(node: Parser.SyntaxNode, context: SymbolContext, parent: Symbol): Symbol | null {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (!nameNode) return null;
 
-    const name = nameNode.text;
+    const name = getNodeText(nameNode, context.content);
     const id = `${context.filepath}:${name}:${node.startPosition.row}`;
 
     return {
@@ -425,25 +426,25 @@ export class JavaParser extends BaseParser {
   private extractLocalVariables(node: Parser.SyntaxNode, context: SymbolContext, symbols: Symbol[], parent: Symbol): void {
     for (const child of node.children) {
       if (child.type === 'local_variable_declaration') {
-        const typeNode = child.childForFieldName('type');
-        const declaratorList = child.childForFieldName('declarator');
+        const typeNode = getChildForFieldName(child, 'type');
+        const declaratorList = getChildForFieldName(child, 'declarator');
 
         if (declaratorList) {
           for (const declarator of declaratorList.children) {
             if (declarator.type === 'variable_declarator') {
-              const nameNode = declarator.childForFieldName('name');
+              const nameNode = getChildForFieldName(declarator, 'name');
               if (nameNode) {
-                const name = nameNode.text;
+                const name = getNodeText(nameNode, context.content);
                 const id = `${context.filepath}:${name}:${child.startPosition.row}`;
 
                 let signature = name;
                 if (typeNode) {
-                  signature += `: ${typeNode.text}`;
+                  signature += `: ${getNodeText(typeNode, context.content)}`;
                 }
 
-                const valueNode = declarator.childForFieldName('value');
+                const valueNode = getChildForFieldName(declarator, 'value');
                 if (valueNode) {
-                  signature += ` = ${valueNode.text}`;
+                  signature += ` = ${getNodeText(valueNode, context.content)}`;
                 }
 
                 symbols.push({
@@ -473,9 +474,9 @@ export class JavaParser extends BaseParser {
   }
 
   private extractImport(node: Parser.SyntaxNode, context: SymbolContext, dependencies: DependencyEdge[]): void {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = getChildForFieldName(node, 'name');
     if (nameNode) {
-      const importPath = nameNode.text;
+      const importPath = getNodeText(nameNode, context.content);
       context.imports.add(importPath);
 
       dependencies.push({
@@ -490,11 +491,11 @@ export class JavaParser extends BaseParser {
     }
   }
 
-  private hasPublicModifier(modifiersNode: Parser.SyntaxNode): boolean {
+  private hasPublicModifier(modifiersNode: Parser.SyntaxNode, context: SymbolContext): boolean {
     for (const child of modifiersNode.children) {
       if (child.type === 'modifiers' || child.type === 'modifier') {
         for (const modifier of child.children) {
-          if (modifier.text === 'public') {
+          if (getNodeText(modifier, context.content) === 'public') {
             return true;
           }
         }
@@ -503,11 +504,11 @@ export class JavaParser extends BaseParser {
     return false;
   }
 
-  private hasStaticModifier(modifiersNode: Parser.SyntaxNode): boolean {
+  private hasStaticModifier(modifiersNode: Parser.SyntaxNode, context: SymbolContext): boolean {
     for (const child of modifiersNode.children) {
       if (child.type === 'modifiers' || child.type === 'modifier') {
         for (const modifier of child.children) {
-          if (modifier.text === 'static') {
+          if (getNodeText(modifier, context.content) === 'static') {
             return true;
           }
         }
